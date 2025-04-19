@@ -1,0 +1,106 @@
+name: Generate Image Validation Report
+
+on:
+  workflow_run:
+    workflows: ["Build and Push"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      imageTag:
+        description: 'Image tag to validate (default: latest)'
+        required: false
+        default: 'latest'
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      
+      - name: Clean workspace
+        if: always()
+        run: |
+          rm -rf image-validation-report.md labels.json sbom.txt test-file
+
+      - name: Load environment variables from .env
+        id: dotenv
+        uses: falti/dotenv-action@v1.1.4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PAT }}
+
+      - name: Set image tag
+        id: set-tag
+        run: |
+          echo "IMAGE_TAG=${{ github.event.inputs.imageTag || 'latest' }}" >> "$GITHUB_ENV"
+    
+
+      - name: Generate validation report
+        run: |
+          IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ steps.dotenv.outputs.image_name }}:${{ env.IMAGE_TAG }}"
+          REPORT_FILE="image-validation-report.md"
+
+          {
+            echo "# Image Validation Report"
+            echo "Generated on: $(date -u)"
+            echo "Image: $IMAGE"
+            echo ""
+            echo "## 1. Tags"
+            echo "Fetching tags from Docker Hub..."
+          } > "$REPORT_FILE"
+
+          curl -s -H "Authorization: Bearer $(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ secrets.DOCKER_USERNAME }}/${{ steps.dotenv.outputs.image_name }}:pull" | jq -r '.token')" \
+            "https://registry-1.docker.io/v2/${{ secrets.DOCKER_USERNAME }}/${{ steps.dotenv.outputs.image_name }}/tags/list" \
+            | jq -r '.tags[]' | sed 's/^/- /' >> "$REPORT_FILE"
+
+          echo "" >> "$REPORT_FILE"
+          {
+            echo "## 2. Labels"
+            echo "Inspecting labels for $IMAGE"
+          } >> "$REPORT_FILE"
+
+          docker pull "$IMAGE"
+          LABELS=$(docker inspect "$IMAGE" | jq '.[0].Config.Labels')
+          echo "$LABELS" > labels.json
+
+          if [[ "$LABELS" == "null" ]]; then
+            echo "_No labels found._" >> "$REPORT_FILE"
+          else
+            echo "$LABELS" | jq >> "$REPORT_FILE"
+          fi
+
+          echo "" >> "$REPORT_FILE"
+          {
+            echo "## 3. Image Size"
+            echo "Size of $IMAGE:"
+          } >> "$REPORT_FILE"
+
+          docker images "$IMAGE" --format "{{.Size}}" >> "$REPORT_FILE"
+
+          echo "" >> "$REPORT_FILE"
+          {
+            echo "## 4. SBOM"
+            echo "Generating Software Bill of Materials (SBOM):"
+          } >> "$REPORT_FILE"
+
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /tmp
+          /tmp/syft "$IMAGE" > sbom.txt
+          echo "SBOM saved to sbom.txt" >> "$REPORT_FILE"
+          head -n 20 sbom.txt >> "$REPORT_FILE"
+          echo "..." >> "$REPORT_FILE"
+          echo "" >> "$REPORT_FILE"
+
+      - name: Upload validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-validation-report
+          path: |
+            image-validation-report.md
+            labels.json
+            sbom.txt

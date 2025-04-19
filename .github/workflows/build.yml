@@ -1,0 +1,45 @@
+name: CI Build and Push
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  release:
+    types:
+      - created
+  workflow_dispatch:
+    inputs:
+      log-level:
+        description: 'Log level'
+        default: 'debug'
+        type: choice
+        options:
+          - info
+          - warning
+          - debug
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Build and Push Docker Image
+        uses: afreisinger/build-push-action@v1.0.0
+        with:
+          image-name: docker-bullseye-linter
+          docker-username: ${{ secrets.DOCKER_USERNAME }}
+          docker-pat: ${{ secrets.DOCKER_PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          log-level: ${{ github.event.inputs.log-level || 'debug' }}
+          tz: America/Argentina/Buenos_Aires
+          publish-dockerhub: 'true'
+          publish-ghcr: 'true'
+          env-file: '.env'

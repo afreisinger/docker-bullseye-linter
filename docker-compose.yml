@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  linter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASHATE_VERSION: 2.1.1
+        YAMLLINT_VERSION: 1.37.0
+        MARKDOWNLINT_VERSION: 0.41.0
+        HADOLINT_VERSION: 2.12.0
+        NODE_VERSION: 18.19.1
+        NPM_VERSION: 10.2.4
+        TITLE: "${TITLE}"
+        DESCRIPTION: "${DESCRIPTION}"
+        VERSION: "${VERSION}"
+        CREATED: "${CREATED}"
+        REVISION: "${REVISION}"
+        AUTHORS: "${AUTHORS}"
+        SOURCE: "https://github.com/${USERNAME}/${IMAGE_NAME}"
+        DOCUMENTATION: "https://github.com/${USERNAME}/${IMAGE_NAME}/README.md"
+        VENDOR: "${VENDOR}"
+        REFNAME: "${USERNAME}/${IMAGE_NAME}:${VERSION}"
+    image: "${USERNAME}/${IMAGE_NAME}:${VERSION}"
