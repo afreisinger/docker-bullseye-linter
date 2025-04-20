@@ -32,14 +32,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build and Push Docker Image
-        uses: afreisinger/build-push-action@v1.0.0
+        uses: afreisinger/build-push-action@v1.1.0
         with:
           image-name: docker-bullseye-linter
           docker-username: ${{ secrets.DOCKER_USERNAME }}
           docker-pat: ${{ secrets.DOCKER_PAT }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           log-level: ${{ github.event.inputs.log-level || 'debug' }}
-          tz: America/Argentina/Buenos_Aires
           publish-dockerhub: 'true'
           publish-ghcr: 'true'
           env-file: '.env'
